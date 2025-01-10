@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿巴语加密器</title>
+    <!-- 使用 CDN 加载 React -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <!-- 直接引入 Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        /* 添加一些自定义样式 */
+        body {
+            background-color: #f5f5f5;
+        }
+        .app-container {
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        /* 添加快手按钮的自定义样式 */
+        .btn-ks {
+            background-color: #ff8c00;
+        }
+        .btn-ks:hover {
+            background-color: #ff7300;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        const App = () => {
+            const [input, setInput] = React.useState('');
+            const [output, setOutput] = React.useState('');
+            const [error, setError] = React.useState('');
+
+            const compressionMap = {
+                '芭': '1111',
+                '啊': '1110',
+                '吧': '1100',
+                '阿': '1',
+                '巴': '0'
+            };
+
+            const textToBinary = (text) => {
+                return text.split('').map(char => 
+                    char.charCodeAt(0).toString(2).padStart(16, '0')
+                ).join('');
+            };
+
+            const binaryToText = (binary) => {
+                const chunks = binary.match(/.{1,16}/g);
+                if (!chunks) return '';
+                return chunks.map(chunk => 
+                    String.fromCharCode(parseInt(chunk, 2))
+                ).join('');
+            };
+
+            const compressBinary = (binary) => {
+                let result = '';
+                let remaining = binary;
+                
+                while (remaining.length > 0) {
+                    let matched = false;
+                    for (let len = 4; len >= 1; len--) {
+                        const prefix = remaining.slice(0, len);
+                        for (const [char, bits] of Object.entries(compressionMap)) {
+                            if (bits === prefix) {
+                                result += char;
+                                remaining = remaining.slice(len);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (matched) break;
+                    }
+                    
+                    if (!matched) {
+                        result += remaining[0] === '1' ? '阿' : '巴';
+                        remaining = remaining.slice(1);
+                    }
+                }
+                return result;
+            };
+
+            const decompressToBinary = (compressed) => {
+                let binary = '';
+                let remaining = compressed;
+                
+                while (remaining.length > 0) {
+                    let matched = false;
+                    for (const [char, bits] of Object.entries(compressionMap)) {
+                        if (remaining.startsWith(char)) {
+                            binary += bits;
+                            remaining = remaining.slice(char.length);
+                            matched = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!matched) {
+                        throw new Error('Invalid input');
+                    }
+                }
+                return binary;
+            };
+
+            const handleEncrypt = () => {
+                setError('');
+                if (input.length > 30) {
+                    setError('最长可输入30个字符');
+                    return;
+                }
+                
+                try {
+                    const binary = textToBinary(input);
+                    const compressed = compressBinary(binary);
+                    setOutput(compressed);
+                } catch (e) {
+                    setError('加密过程出错');
+                }
+            };
+
+            const handleDecrypt = () => {
+                setError('');
+                const validChars = new Set('阿啊巴吧芭');
+                if (!input.split('').every(char => validChars.has(char))) {
+                    setError('输入内容有误，无法解密');
+                    return;
+                }
+
+                try {
+                    const binary = decompressToBinary(input);
+                    const decrypted = binaryToText(binary);
+                    setOutput(decrypted);
+                } catch (e) {
+                    setError('输入内容有误，无法解密');
+                }
+            };
+
+            return React.createElement('div', { className: 'app-container max-w-md mx-auto' },
+                React.createElement('h1', { className: 'text-3xl font-bold text-center mb-8' }, '阿巴语加密器'),
+                
+                React.createElement('div', { className: 'space-y-6' },
+                    React.createElement('div', { className: 'space-y-2' },
+                        React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, '请输入内容'),
+                        React.createElement('input', {
+                            type: 'text',
+                            value: input,
+                            onChange: (e) => setInput(e.target.value),
+                            className: 'w-full p-2 border rounded-md',
+                            placeholder: '请输入内容'
+                        })
+                    ),
+
+                    React.createElement('div', { className: 'flex space-x-4' },
+                        React.createElement('button', {
+                            onClick: handleEncrypt,
+                            className: 'flex-1 bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600'
+                        }, '开始加密'),
+                        React.createElement('button', {
+                            onClick: handleDecrypt,
+                            className: 'flex-1 bg-green-500 text-white p-2 rounded-md hover:bg-green-600'
+                        }, '开始解密')
+                    ),
+
+                    React.createElement('div', { className: 'space-y-2' },
+                        React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, '输出结果'),
+                        React.createElement('textarea', {
+                            readOnly: true,
+                            value: output,
+                            className: 'w-full p-2 border rounded-md h-24'
+                        })
+                    ),
+
+                    error && React.createElement('div', { className: 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded' },
+                        error
+                    ),
+
+                    React.createElement('div', { className: 'pt-4 border-t' },
+                        React.createElement('div', { className: 'text-center text-gray-600' }, 'Made by 猫福吉'),
+                        React.createElement('div', { className: 'flex items-center justify-center space-x-2 mt-2' },
+                            React.createElement('span', { className: 'text-gray-600' }, '关注我'),
+                            React.createElement('a', {
+                                href: 'https://www.xiaohongshu.com/user/profile/55efa76562a60c4b6ce9bad9',
+                                target: '_blank',
+                                rel: 'noopener noreferrer',
+                                className: 'px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 text-sm'
+                            }, '小红书'),
+                            React.createElement('a', {
+                                href: 'https://v.kuaishou.com/gnvj3B',
+                                target: '_blank',
+                                rel: 'noopener noreferrer',
+                                className: 'px-3 py-1 text-white rounded-md text-sm btn-ks'
+                            }, '快手')
+                        )
+                    )
+                )
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>
