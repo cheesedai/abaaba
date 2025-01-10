@@ -4,13 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>阿巴语加密器</title>
-    <!-- 使用 CDN 加载 React -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <!-- 直接引入 Tailwind CSS -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        /* 添加一些自定义样式 */
         body {
             background-color: #f5f5f5;
         }
@@ -21,12 +18,32 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        /* 添加快手按钮的自定义样式 */
         .btn-ks {
             background-color: #ff8c00;
         }
         .btn-ks:hover {
             background-color: #ff7300;
+        }
+        /* 添加输入组和按钮组样式 */
+        .input-group, .output-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .input-group input, .output-group textarea {
+            flex: 1;
+        }
+        .action-button {
+            padding: 0.5rem 1rem;
+            background-color: #6B7280;
+            color: white;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+            cursor: pointer;
+            align-self: center;
+        }
+        .action-button:hover {
+            background-color: #4B5563;
         }
     </style>
 </head>
@@ -38,6 +55,7 @@
             const [output, setOutput] = React.useState('');
             const [error, setError] = React.useState('');
 
+            // 原有的加密相关代码保持不变
             const compressionMap = {
                 '芭': '1111',
                 '啊': '1110',
@@ -142,19 +160,44 @@
                 }
             };
 
+            // 新增粘贴功能
+            const handlePaste = async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    setInput(text);
+                } catch (err) {
+                    setError('无法访问剪贴板');
+                }
+            };
+
+            // 新增复制功能
+            const handleCopy = async () => {
+                try {
+                    await navigator.clipboard.writeText(output);
+                } catch (err) {
+                    setError('复制失败');
+                }
+            };
+
             return React.createElement('div', { className: 'app-container max-w-md mx-auto' },
                 React.createElement('h1', { className: 'text-3xl font-bold text-center mb-8' }, '阿巴语加密器'),
                 
                 React.createElement('div', { className: 'space-y-6' },
                     React.createElement('div', { className: 'space-y-2' },
                         React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, '请输入内容'),
-                        React.createElement('input', {
-                            type: 'text',
-                            value: input,
-                            onChange: (e) => setInput(e.target.value),
-                            className: 'w-full p-2 border rounded-md',
-                            placeholder: '请输入内容'
-                        })
+                        React.createElement('div', { className: 'input-group' },
+                            React.createElement('input', {
+                                type: 'text',
+                                value: input,
+                                onChange: (e) => setInput(e.target.value),
+                                className: 'p-2 border rounded-md',
+                                placeholder: '请输入内容'
+                            }),
+                            React.createElement('button', {
+                                onClick: handlePaste,
+                                className: 'action-button'
+                            }, '粘贴')
+                        )
                     ),
 
                     React.createElement('div', { className: 'flex space-x-4' },
@@ -170,11 +213,17 @@
 
                     React.createElement('div', { className: 'space-y-2' },
                         React.createElement('label', { className: 'block text-sm font-medium text-gray-700' }, '输出结果'),
-                        React.createElement('textarea', {
-                            readOnly: true,
-                            value: output,
-                            className: 'w-full p-2 border rounded-md h-24'
-                        })
+                        React.createElement('div', { className: 'output-group' },
+                            React.createElement('textarea', {
+                                readOnly: true,
+                                value: output,
+                                className: 'p-2 border rounded-md h-24'
+                            }),
+                            React.createElement('button', {
+                                onClick: handleCopy,
+                                className: 'action-button'
+                            }, '复制')
+                        )
                     ),
 
                     error && React.createElement('div', { className: 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded' },
