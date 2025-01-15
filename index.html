@@ -77,7 +77,7 @@
             const [output, setOutput] = React.useState('');
             const [error, setError] = React.useState('');
             const [copySuccess, setCopySuccess] = React.useState(false);
-            const [isMiaoMode, setIsMiaoMode] = React.useState(true);
+            const [isMiaoMode, setIsMiaoMode] = React.useState(false);  // 默认为阿巴语模式
 
             // 喵语加密映射
             const miaoCompressionMap = {
@@ -150,19 +150,52 @@
                 let binary = '';
                 let remaining = compressed;
                 
-                while (remaining.length > 0) {
-                    let matched = false;
-                    for (const [char, bits] of Object.entries(getCompressionMap())) {
-                        if (remaining.startsWith(char)) {
-                            binary += bits;
-                            remaining = remaining.slice(char.length);
-                            matched = true;
-                            break;
+                // 特殊处理喵语模式
+                if (isMiaoMode) {
+                    while (remaining.length > 0) {
+                        let matched = false;
+                        // 先检查较长的模式
+                        const patterns = [
+                            ['咪～', '11110'],
+                            ['嗷呜～', '11100'],
+                            ['嗷～', '11000'],
+                            ['喵～', '10000'],
+                            ['敖呜', '10100'],
+                            ['咪', '1111'],
+                            ['嗷', '1100'],
+                            ['喵', '1'],
+                            ['呜', '0']
+                        ];
+
+                        for (const [pattern, bits] of patterns) {
+                            if (remaining.startsWith(pattern)) {
+                                binary += bits;
+                                remaining = remaining.slice(pattern.length);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!matched) {
+                            throw new Error('Invalid input');
                         }
                     }
-                    
-                    if (!matched) {
-                        throw new Error('Invalid input');
+                } else {
+                    // 阿巴语模式保持原样
+                    while (remaining.length > 0) {
+                        let matched = false;
+                        for (const [char, bits] of Object.entries(abaCompressionMap)) {
+                            if (remaining.startsWith(char)) {
+                                binary += bits;
+                                remaining = remaining.slice(char.length);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!matched) {
+                            throw new Error('Invalid input');
+                        }
                     }
                 }
                 return binary;
