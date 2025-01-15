@@ -12,11 +12,12 @@
 </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>阿巴语加密器</title>
+    <title>喵语加密器</title>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
+        /* 保持原有样式不变 */
         body {
             background-color: #f5f5f5;
         }
@@ -33,7 +34,6 @@
         .btn-ks:hover {
             background-color: #ff7300;
         }
-        /* 添加输入组和按钮组样式 */
         .input-group, .output-group {
             display: flex;
             gap: 0.5rem;
@@ -54,6 +54,19 @@
         .action-button:hover {
             background-color: #4B5563;
         }
+        .copy-success {
+            color: #059669;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            text-align: right;
+        }
+        .title-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
     </style>
 </head>
 <body>
@@ -63,15 +76,33 @@
             const [input, setInput] = React.useState('');
             const [output, setOutput] = React.useState('');
             const [error, setError] = React.useState('');
+            const [copySuccess, setCopySuccess] = React.useState(false);
+            const [isMiaoMode, setIsMiaoMode] = React.useState(true);
 
-            // 原有的加密相关代码保持不变
-            const compressionMap = {
+            // 喵语加密映射
+            const miaoCompressionMap = {
+                '咪': '1111',
+                '咪～': '11110',
+                '嗷呜～': '11100',
+                '嗷': '1100',
+                '嗷～': '11000',
+                '喵～': '10000',
+                '敖呜': '10100',
+                '喵': '1',
+                '呜': '0'
+            };
+
+            // 阿巴语加密映射
+            const abaCompressionMap = {
                 '芭': '1111',
                 '啊': '1110',
                 '吧': '1100',
                 '阿': '1',
                 '巴': '0'
             };
+
+            // 获取当前使用的映射
+            const getCompressionMap = () => isMiaoMode ? miaoCompressionMap : abaCompressionMap;
 
             const textToBinary = (text) => {
                 return text.split('').map(char => 
@@ -90,12 +121,13 @@
             const compressBinary = (binary) => {
                 let result = '';
                 let remaining = binary;
+                const maxLen = isMiaoMode ? 5 : 4;
                 
                 while (remaining.length > 0) {
                     let matched = false;
-                    for (let len = 4; len >= 1; len--) {
+                    for (let len = maxLen; len >= 1; len--) {
                         const prefix = remaining.slice(0, len);
-                        for (const [char, bits] of Object.entries(compressionMap)) {
+                        for (const [char, bits] of Object.entries(getCompressionMap())) {
                             if (bits === prefix) {
                                 result += char;
                                 remaining = remaining.slice(len);
@@ -107,7 +139,7 @@
                     }
                     
                     if (!matched) {
-                        result += remaining[0] === '1' ? '阿' : '巴';
+                        result += remaining[0] === '1' ? (isMiaoMode ? '喵' : '阿') : (isMiaoMode ? '呜' : '巴');
                         remaining = remaining.slice(1);
                     }
                 }
@@ -120,7 +152,7 @@
                 
                 while (remaining.length > 0) {
                     let matched = false;
-                    for (const [char, bits] of Object.entries(compressionMap)) {
+                    for (const [char, bits] of Object.entries(getCompressionMap())) {
                         if (remaining.startsWith(char)) {
                             binary += bits;
                             remaining = remaining.slice(char.length);
@@ -138,6 +170,7 @@
 
             const handleEncrypt = () => {
                 setError('');
+                setCopySuccess(false);
                 if (input.length > 30) {
                     setError('最长可输入30个字符');
                     return;
@@ -154,7 +187,11 @@
 
             const handleDecrypt = () => {
                 setError('');
-                const validChars = new Set('阿啊巴吧芭');
+                setCopySuccess(false);
+                const validChars = isMiaoMode ? 
+                    new Set(['喵', '呜', '嗷', '咪', '～', '敖']) :
+                    new Set(['阿', '啊', '巴', '吧', '芭']);
+
                 if (!input.split('').every(char => validChars.has(char))) {
                     setError('输入内容有误，无法解密');
                     return;
@@ -169,27 +206,46 @@
                 }
             };
 
-            // 新增粘贴功能
             const handlePaste = async () => {
                 try {
                     const text = await navigator.clipboard.readText();
                     setInput(text);
+                    setCopySuccess(false);
                 } catch (err) {
                     setError('无法访问剪贴板');
                 }
             };
 
-            // 新增复制功能
             const handleCopy = async () => {
                 try {
                     await navigator.clipboard.writeText(output);
+                    setCopySuccess(true);
+                    setTimeout(() => {
+                        setCopySuccess(false);
+                    }, 3000);
                 } catch (err) {
                     setError('复制失败');
                 }
             };
 
+            const toggleMode = () => {
+                setIsMiaoMode(!isMiaoMode);
+                setInput('');
+                setOutput('');
+                setError('');
+                setCopySuccess(false);
+            };
+
             return React.createElement('div', { className: 'app-container max-w-md mx-auto' },
-                React.createElement('h1', { className: 'text-3xl font-bold text-center mb-8' }, '阿巴语加密器'),
+                React.createElement('div', { className: 'title-container' },
+                    React.createElement('h1', { className: 'text-3xl font-bold' }, 
+                        isMiaoMode ? '喵语加密器' : '阿巴语加密器'
+                    ),
+                    React.createElement('button', {
+                        onClick: toggleMode,
+                        className: 'px-3 py-1 bg-purple-500 text-white rounded-md hover:bg-purple-600 text-sm'
+                    }, '切换语言')
+                ),
                 
                 React.createElement('div', { className: 'space-y-6' },
                     React.createElement('div', { className: 'space-y-2' },
@@ -199,7 +255,7 @@
                                 type: 'text',
                                 value: input,
                                 onChange: (e) => setInput(e.target.value),
-                                className: 'p-2 border rounded-md',
+                                className: 'p-2 border rounded-md w-full',
                                 placeholder: '请输入内容'
                             }),
                             React.createElement('button', {
@@ -226,13 +282,14 @@
                             React.createElement('textarea', {
                                 readOnly: true,
                                 value: output,
-                                className: 'p-2 border rounded-md h-24'
+                                className: 'p-2 border rounded-md h-24 w-full'
                             }),
                             React.createElement('button', {
                                 onClick: handleCopy,
                                 className: 'action-button'
                             }, '复制')
-                        )
+                        ),
+                        copySuccess && React.createElement('div', { className: 'copy-success' }, '复制成功！')
                     ),
 
                     error && React.createElement('div', { className: 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded' },
