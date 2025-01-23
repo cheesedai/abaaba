@@ -67,6 +67,35 @@
             gap: 1rem;
             margin-bottom: 2rem;
         }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+        .dropdown-content button {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: left;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+        .dropdown-content button:hover {
+            background-color: #f1f1f1;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -77,7 +106,16 @@
             const [output, setOutput] = React.useState('');
             const [error, setError] = React.useState('');
             const [copySuccess, setCopySuccess] = React.useState(false);
-            const [isMiaoMode, setIsMiaoMode] = React.useState(false);  // 默认为阿巴语模式
+            const [mode, setMode] = React.useState('aba'); // 默认模式为阿巴语加密
+
+            // 阿巴语加密映射
+            const abaCompressionMap = {
+                '芭': '1111',
+                '啊': '1110',
+                '吧': '1100',
+                '阿': '1',
+                '巴': '0'
+            };
 
             // 喵语加密映射
             const miaoCompressionMap = {
@@ -92,22 +130,29 @@
                 '呜': '0'
             };
 
-            // 阿巴语加密映射
-            const abaCompressionMap = {
-                '芭': '1111',
-                '啊': '1110',
-                '吧': '1100',
-                '阿': '1',
-                '巴': '0'
+            // 喵语加密2.0映射
+            const miaoCompressionMapV2 = {
+                '咪': '1111',
+                '嗷': '1110',
+                '喵': '110',
+                '呜': '10',
+                '～': '0'
             };
 
             // 获取当前使用的映射
-            const getCompressionMap = () => isMiaoMode ? miaoCompressionMap : abaCompressionMap;
+            const getCompressionMap = () => {
+                if (mode === 'aba') return abaCompressionMap;
+                if (mode === 'miao') return miaoCompressionMap;
+                if (mode === 'miaoV2') return miaoCompressionMapV2;
+                return abaCompressionMap;
+            };
 
+            // 动态二进制长度
             const textToBinary = (text) => {
-                return text.split('').map(char => 
-                    char.charCodeAt(0).toString(2).padStart(16, '0')
-                ).join('');
+                return text.split('').map(char => {
+                    const code = char.charCodeAt(0);
+                    return code < 128 ? code.toString(2).padStart(8, '0') : code.toString(2).padStart(16, '0');
+                }).join('');
             };
 
             const binaryToText = (binary) => {
@@ -121,7 +166,7 @@
             const compressBinary = (binary) => {
                 let result = '';
                 let remaining = binary;
-                const maxLen = isMiaoMode ? 5 : 4;
+                const maxLen = mode === 'miaoV2' ? 5 : 4;
                 
                 while (remaining.length > 0) {
                     let matched = false;
@@ -139,7 +184,7 @@
                     }
                     
                     if (!matched) {
-                        result += remaining[0] === '1' ? (isMiaoMode ? '喵' : '阿') : (isMiaoMode ? '呜' : '巴');
+                        result += remaining[0] === '1' ? (mode === 'miaoV2' ? '喵' : '阿') : (mode === 'miaoV2' ? '呜' : '巴');
                         remaining = remaining.slice(1);
                     }
                 }
@@ -151,11 +196,11 @@
                 let remaining = compressed;
                 
                 // 特殊处理喵语模式
-                if (isMiaoMode) {
+                if (mode === 'miao' || mode === 'miaoV2') {
                     while (remaining.length > 0) {
                         let matched = false;
                         // 先检查较长的模式
-                        const patterns = [
+                        const patterns = mode === 'miao' ? [
                             ['咪～', '11110'],
                             ['嗷呜～', '11100'],
                             ['嗷～', '11000'],
@@ -165,6 +210,12 @@
                             ['嗷', '1100'],
                             ['喵', '1'],
                             ['呜', '0']
+                        ] : [
+                            ['咪', '1111'],
+                            ['嗷', '1110'],
+                            ['喵', '110'],
+                            ['呜', '10'],
+                            ['～', '0']
                         ];
 
                         for (const [pattern, bits] of patterns) {
@@ -221,9 +272,11 @@
             const handleDecrypt = () => {
                 setError('');
                 setCopySuccess(false);
-                const validChars = isMiaoMode ? 
+                const validChars = mode === 'aba' ? 
+                    new Set(['阿', '啊', '巴', '吧', '芭']) :
+                    mode === 'miao' ? 
                     new Set(['喵', '呜', '嗷', '咪', '～', '敖']) :
-                    new Set(['阿', '啊', '巴', '吧', '芭']);
+                    new Set(['喵', '呜', '嗷', '咪', '～']);
 
                 if (!input.split('').every(char => validChars.has(char))) {
                     setError('输入内容有误，无法解密');
@@ -261,8 +314,8 @@
                 }
             };
 
-            const toggleMode = () => {
-                setIsMiaoMode(!isMiaoMode);
+            const handleModeChange = (newMode) => {
+                setMode(newMode);
                 setInput('');
                 setOutput('');
                 setError('');
@@ -272,12 +325,27 @@
             return React.createElement('div', { className: 'app-container max-w-md mx-auto' },
                 React.createElement('div', { className: 'title-container' },
                     React.createElement('h1', { className: 'text-3xl font-bold' }, 
-                        isMiaoMode ? '喵语加密器' : '阿巴语加密器'
+                        mode === 'aba' ? '阿巴语加密器' : mode === 'miao' ? '喵语加密器' : '喵语加密器2.0'
                     ),
-                    React.createElement('button', {
-                        onClick: toggleMode,
-                        className: 'px-3 py-1 bg-purple-500 text-white rounded-md hover:bg-purple-600 text-sm'
-                    }, '切换语言')
+                    React.createElement('div', { className: 'dropdown' },
+                        React.createElement('button', {
+                            className: 'px-3 py-1 bg-purple-500 text-white rounded-md hover:bg-purple-600 text-sm'
+                        }, '切换模式'),
+                        React.createElement('div', { className: 'dropdown-content' },
+                            React.createElement('button', {
+                                onClick: () => handleModeChange('aba'),
+                                className: 'text-sm'
+                            }, '阿巴语加密'),
+                            React.createElement('button', {
+                                onClick: () => handleModeChange('miao'),
+                                className: 'text-sm'
+                            }, '喵语加密'),
+                            React.createElement('button', {
+                                onClick: () => handleModeChange('miaoV2'),
+                                className: 'text-sm'
+                            }, '喵语加密2.0')
+                        )
+                    )
                 ),
                 
                 React.createElement('div', { className: 'space-y-6' },
@@ -331,6 +399,7 @@
 
                     React.createElement('div', { className: 'pt-4 border-t' },
                         React.createElement('div', { className: 'text-center text-gray-600' }, 'Made by 猫福吉'),
+                        React.createElement('div', { className: 'text-center text-gray-600 text-sm mt-1' }, '欢迎关注下方社媒，会持续开发一些好玩的软件哦～'),
                         React.createElement('div', { className: 'flex items-center justify-center space-x-2 mt-2' },
                             React.createElement('span', { className: 'text-gray-600' }, '关注我'),
                             React.createElement('a', {
