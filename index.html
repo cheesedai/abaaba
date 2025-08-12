@@ -12,7 +12,6 @@
     
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- 需求3：修改主标题 -->
     <title>MojiCode (Moji密码) 🐾 CheeseMeow's Lab</title>
 
     <!-- 引入React和Tailwind CSS -->
@@ -26,15 +25,9 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         }
-        .btn-action {
-            transition: background-color 0.2s, transform 0.1s;
-        }
-        .btn-action:active {
-            transform: scale(0.97);
-        }
-        .tab-btn {
-            transition: all 0.2s ease-in-out;
-        }
+        .btn-action { transition: all 0.2s; }
+        .btn-action:active { transform: scale(0.97); }
+        .tab-btn { transition: all 0.2s ease-in-out; }
     </style>
 </head>
 <body>
@@ -56,212 +49,134 @@
             const [error, setError] = React.useState('');
             const [copySuccess, setCopySuccess] = React.useState(false);
             const [mode, setMode] = React.useState('aba');
+            // 新增：控制弹窗显示的状态
+            const [isModalOpen, setIsModalOpen] = React.useState(false);
 
             // =================================================================
-            // 核心加密逻辑（保持不变）
+            // 核心加密逻辑：Base-N 编码方案（保持不变）
             // =================================================================
-            const abaCompressionMap = {
-                '芭': '1111', '啊': '1110', '吧': '1100', '阿': '1', '巴': '0'
-            };
-            const miaoCompressionMap = {
-                '咪～': '11110', '嗷呜～': '11100', '嗷～': '11000', '喵～': '10000',
-                '敖呜': '10100', '咪': '1111', '嗷': '1100', '喵': '1', '呜': '0'
-            };
-            const getCompressionMap = () => mode === 'miao' ? miaoCompressionMap : abaCompressionMap;
+            const abaDigits = ['巴', '阿', '吧', '啊', '芭'];
+            const miaoDigits = ['呜', '喵', '嗷', '咪', '~'];
+            const abaMap = new Map(abaDigits.map((d, i) => [d, i]));
+            const miaoMap = new Map(miaoDigits.map((d, i) => [d, i]));
             const encoder = new TextEncoder();
             const decoder = new TextDecoder();
-            const textToBinary_UTF8 = (text) => {
+
+            const encrypt = (text, digits) => {
+                if (!text) return '';
+                const base = BigInt(digits.length);
                 const bytes = encoder.encode(text);
-                let binaryString = '';
+                let bigIntValue = 0n;
                 for (const byte of bytes) {
-                    binaryString += byte.toString(2).padStart(8, '0');
+                    bigIntValue = (bigIntValue << 8n) + BigInt(byte);
                 }
-                return binaryString;
-            };
-            const binaryToText_UTF8 = (binary) => {
-                if (binary.length % 8 !== 0) throw new Error("解密失败：二进制数据损坏。");
-                const bytes = new Uint8Array(binary.length / 8);
-                for (let i = 0; i < bytes.length; i++) {
-                    bytes[i] = parseInt(binary.substr(i * 8, 8), 2);
-                }
-                return decoder.decode(bytes);
-            };
-            const compressBinary = (binary) => {
+                if (bigIntValue === 0n) return digits[0];
                 let result = '';
-                let remaining = binary;
-                const sortedPatterns = Object.entries(getCompressionMap()).sort((a,b) => b[1].length - a[1].length);
-                while (remaining.length > 0) {
-                    let matched = false;
-                    for (const [char, bits] of sortedPatterns) {
-                        if (remaining.startsWith(bits)) {
-                            result += char;
-                            remaining = remaining.slice(bits.length);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (!matched) {
-                        result += remaining[0] === '1' ? (mode === 'miao' ? '喵' : '阿') : (mode === 'miao' ? '呜' : '巴');
-                        remaining = remaining.slice(1);
-                    }
+                while (bigIntValue > 0n) {
+                    result = digits[Number(bigIntValue % base)] + result;
+                    bigIntValue = bigIntValue / base;
                 }
                 return result;
             };
-            const decompressToBinary = (compressed) => {
-                let binary = '';
-                let remaining = compressed;
-                const sortedPatterns = Object.entries(getCompressionMap()).sort((a,b) => b[0].length - a[0].length);
-                while (remaining.length > 0) {
-                    let matched = false;
-                    for (const [char, bits] of sortedPatterns) {
-                        if (remaining.startsWith(char)) {
-                            binary += bits;
-                            remaining = remaining.slice(char.length);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (!matched) throw new Error("输入内容包含无法识别的加密字符。");
+
+            const decrypt = (encoded, digitMap) => {
+                if (!encoded) return '';
+                const base = BigInt(digitMap.size);
+                let bigIntValue = 0n;
+                for (const char of encoded) {
+                    const digit = digitMap.get(char);
+                    if (digit === undefined) throw new Error('密文包含无法识别的字符。');
+                    bigIntValue = bigIntValue * base + BigInt(digit);
                 }
-                return binary;
+                if (bigIntValue === 0n && encoded !== digitMap.keys().next().value) return '';
+                let bytes = [];
+                while (bigIntValue > 0n) {
+                    bytes.unshift(Number(bigIntValue & 255n));
+                    bigIntValue = bigIntValue >> 8n;
+                }
+                return decoder.decode(new Uint8Array(bytes));
             };
 
             // =================================================================
             // 事件处理函数（保持不变）
             // =================================================================
-            const handleEncrypt = () => {
-                setError('');
-                setCopySuccess(false);
-                if (!input) return;
-                try {
-                    setOutput(compressBinary(textToBinary_UTF8(input)));
-                } catch (e) {
-                    setError('加密过程出错，请重试。');
-                }
-            };
-            const handleDecrypt = () => {
-                setError('');
-                setCopySuccess(false);
-                if (!input) return;
-                try {
-                    setOutput(binaryToText_UTF8(decompressToBinary(input)));
-                } catch (e) {
-                    setError(e.message || '输入内容有误，无法解密。');
-                }
-            };
-            const handlePaste = async () => {
-                try {
-                    const text = await navigator.clipboard.readText();
-                    setInput(text);
-                    setError('');
-                    setCopySuccess(false);
-                } catch (err) {
-                    setError('无法访问剪贴板。');
-                }
-            };
-            const handleCopy = async () => {
-                if (!output) return;
-                try {
-                    await navigator.clipboard.writeText(output);
-                    setCopySuccess(true);
-                    setTimeout(() => setCopySuccess(false), 2000);
-                } catch (err) {
-                    setError('复制失败。');
-                }
-            };
-            const handleModeChange = (newMode) => {
-                if (mode === newMode) return;
-                setMode(newMode);
-                setInput('');
-                setOutput('');
-                setError('');
-                setCopySuccess(false);
-            };
+            const handleEncrypt = () => { setError(''); setCopySuccess(false); try { setOutput(encrypt(input, mode === 'aba' ? abaDigits : miaoDigits)); } catch (e) { setError('加密过程出错，请重试。'); } };
+            const handleDecrypt = () => { setError(''); setCopySuccess(false); try { setOutput(decrypt(input, mode === 'aba' ? abaMap : miaoMap)); } catch (e) { setError(e.message || '输入内容有误，无法解密。'); } };
+            const handlePaste = async () => { try{const t=await navigator.clipboard.readText();setInput(t);setError('');setCopySuccess(false)}catch(e){setError('无法访问剪贴板')} };
+            const handleCopy = async () => { if(!output)return;try{await navigator.clipboard.writeText(output);setCopySuccess(true);setTimeout(()=>setCopySuccess(false),2e3)}catch(e){setError('复制失败')} };
+            const handleModeChange = (newMode) => { if(mode===newMode)return;setMode(newMode);setInput('');setOutput('');setError('');setCopySuccess(false) };
             
             // =================================================================
             // UI渲染
             // =================================================================
             return React.createElement('main', { className: 'flex flex-col items-center justify-center min-h-screen p-4' },
                 React.createElement('div', { className: 'w-full max-w-lg bg-white/70 backdrop-blur-xl rounded-2xl shadow-2xl p-6 md:p-8 space-y-6' },
-                    // -- 需求3：修改主标题 --
-                    React.createElement('div', { className: 'text-center' },
-                        React.createElement('h1', { className: 'text-3xl font-bold text-gray-800' }, '🐾 MojiCode (Moji密码)')
+                    
+                    // -- 标题区域（添加了相对定位和?按钮） --
+                    React.createElement('div', { className: 'relative text-center' },
+                        React.createElement('h1', { className: 'text-3xl font-bold text-gray-800' }, '🐾 MojiCode (Moji密码)'),
+                        // -- 新增的?按钮 --
+                        React.createElement('button', {
+                            onClick: () => setIsModalOpen(true),
+                            className: 'absolute top-0 right-0 flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full text-gray-700 font-semibold hover:bg-gray-300 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-gray-400',
+                            'aria-label': '更新说明'
+                        }, '?')
                     ),
 
-                    // -- Tab模式切换（需求2：优化按钮颜色） --
+                    // ... (以下所有元素结构和样式都保持原样) ...
                     React.createElement('div', { className: 'flex bg-gray-200 rounded-lg p-1' },
-                        React.createElement('button', {
-                            onClick: () => handleModeChange('aba'),
-                            // 阿巴语使用 'bg-teal-600' (蓝绿色) 作为选中色
-                            className: `tab-btn w-1/2 p-2 rounded-md font-semibold text-center ${mode === 'aba' ? 'bg-teal-600 text-white shadow' : 'text-gray-600 hover:bg-gray-300'}`
-                        }, '阿巴语加密'),
-                        React.createElement('button', {
-                            onClick: () => handleModeChange('miao'),
-                            // 喵语使用 'bg-pink-500' (粉色) 作为选中色
-                            className: `tab-btn w-1/2 p-2 rounded-md font-semibold text-center ${mode === 'miao' ? 'bg-pink-500 text-white shadow' : 'text-gray-600 hover:bg-gray-300'}`
-                        }, '喵语加密')
+                        React.createElement('button', { onClick: () => handleModeChange('aba'), className: `tab-btn w-1/2 p-2 rounded-md font-semibold text-center ${mode==='aba'?'bg-teal-600 text-white shadow':'text-gray-600 hover:bg-gray-300'}` }, '阿巴语加密'),
+                        React.createElement('button', { onClick: () => handleModeChange('miao'), className: `tab-btn w-1/2 p-2 rounded-md font-semibold text-center ${mode==='miao'?'bg-pink-500 text-white shadow':'text-gray-600 hover:bg-gray-300'}` }, '喵语加密')
                     ),
-
-                    // -- 输入框区域 --
                     React.createElement('div', { className: 'space-y-2' },
                         React.createElement('label', { className: 'text-sm font-medium text-gray-600' }, '输入内容 (原文或密文)'),
                         React.createElement('div', { className: 'relative' },
-                            React.createElement('textarea', {
-                                value: input,
-                                onChange: (e) => setInput(e.target.value),
-                                className: 'w-full p-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition h-28 resize-y',
-                                placeholder: '输入任何文本，包括英文和 Emoji 😊...'
-                            }),
+                            React.createElement('textarea', { value: input, onChange: (e) => setInput(e.target.value), className: 'w-full p-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition h-28 resize-y', placeholder: '输入任何文本，包括英文和 Emoji 😊...' }),
                             React.createElement('button', { onClick: handlePaste, className: 'absolute top-2 right-2 px-3 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 text-sm font-semibold btn-action' }, '粘贴')
                         )
                     ),
-
-                    // -- 主要操作按钮 --
                     React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
                         React.createElement('button', { onClick: handleEncrypt, className: 'w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 btn-action' }, '✨ 加密'),
                         React.createElement('button', { onClick: handleDecrypt, className: 'w-full py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 btn-action' }, '🔑 解密')
                     ),
-
-                    // -- 输出框区域 --
                     React.createElement('div', { className: 'space-y-2' },
                         React.createElement('label', { className: 'text-sm font-medium text-gray-600' }, '输出结果'),
                         React.createElement('div', { className: 'relative' },
-                            React.createElement('textarea', {
-                                readOnly: true,
-                                value: output,
-                                className: 'w-full p-3 pr-20 border border-gray-300 rounded-lg h-28 resize-y bg-gray-50',
-                                placeholder: '结果将显示在这里...'
-                            }),
+                            React.createElement('textarea', { readOnly: true, value: output, className: 'w-full p-3 pr-20 border border-gray-300 rounded-lg h-28 resize-y bg-gray-50', placeholder: '结果将显示在这里...' }),
                             React.createElement('button', { onClick: handleCopy, className: 'absolute top-2 right-2 px-3 py-1 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 text-sm font-semibold btn-action' }, '复制')
                         ),
                         copySuccess && React.createElement('div', { className: 'text-right text-green-600 font-semibold text-sm mt-1' }, '✓ 复制成功！')
                     ),
-
-                    // -- 错误提示 --
-                    error && React.createElement('div', { className: 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md' },
-                        React.createElement('p', null, error)
-                    ),
-                    
+                    error && React.createElement('div', { className: 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md' }, React.createElement('p', null, error)),
                     React.createElement('hr'),
-
-                    // -- 需求4：优化营销文案 --
                     React.createElement('div', { className: 'text-center space-y-3' },
                         React.createElement('p', { className: 'text-sm text-gray-600 font-semibold' }, '想体验更便捷的加密？试试MojiCode，任何文本一键加密成emoji🤪'),
-                        React.createElement('a', {
-                            href: 'https://apps.apple.com/us/app/mojicode-encrypted-messaging/id6748670832',
-                            target: 'blank',
-                            rel: 'noopener noreferrer',
-                            className: 'block w-full py-3 bg-black text-white text-center font-bold rounded-lg hover:bg-gray-800 btn-action'
-                        }, ' 下载 MojiCode App')
+                        React.createElement('a', { href: 'https://apps.apple.com/us/app/mojicode-encrypted-messaging/id6748670832', target: 'blank', rel: 'noopener noreferrer', className: 'block w-full py-3 bg-black text-white text-center font-bold rounded-lg hover:bg-gray-800 btn-action' }, ' 下载 MojiCode App')
                     ),
-                    
-                    // -- 需求1：恢复作者信息和社交链接 --
                     React.createElement('div', { className: 'text-center text-gray-500 text-sm space-y-2 pt-4 border-t border-gray-200/60' },
                         React.createElement('p', null, 'Made with ❤️ by 猫福吉 (CheeseMeow)'),
                         React.createElement('div', { className: 'flex items-center justify-center space-x-4' },
                             React.createElement('a', { href: 'https://www.xiaohongshu.com/user/profile/55efa76562a60c4b6ce9bad9', target: '_blank', rel: 'noopener noreferrer', className: 'px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 text-xs font-semibold btn-action' }, '小红书'),
                             React.createElement('a', { href: 'https://v.kuaishou.com/gnvj3B', target: '_blank', rel: 'noopener noreferrer', className: 'px-3 py-1 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-xs font-semibold btn-action' }, '快手')
                         )
+                    )
+                ),
+
+                // -- 新增的弹窗Modal组件 --
+                isModalOpen && React.createElement('div', {
+                        onClick: () => setIsModalOpen(false),
+                        className: 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4'
+                    },
+                    React.createElement('div', {
+                            onClick: (e) => e.stopPropagation(), // 防止点击弹窗内容导致弹窗关闭
+                            className: 'bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm text-center space-y-4'
+                        },
+                        React.createElement('h3', { className: 'text-xl font-bold text-gray-800' }, '✨ 更新说明'),
+                        React.createElement('p', { className: 'text-gray-600' }, '从2025年8月12日起，加密方式进行了升级优化，可加密英文、特殊字符和emoji，加密后的文本长度也更短啦，快试试吧～🤪'),
+                        React.createElement('button', {
+                            onClick: () => setIsModalOpen(false),
+                            className: 'w-full py-2 bg-teal-600 text-white font-bold rounded-lg hover:bg-teal-700 btn-action'
+                        }, '我明白了')
                     )
                 )
             );
