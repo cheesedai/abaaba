@@ -71,48 +71,76 @@
             const [mode, setMode] = React.useState('aba');
 
             // =================================================================
-            // 需求1：保持原有的代码加密逻辑，以下逻辑完全未作修改
+            // 需求1：保持原有的代码加密逻辑，以下逻辑已恢复为原始版本
             // =================================================================
 
+            // 阿巴语加密映射
             const abaCompressionMap = {
-                '芭': '1111', '啊': '1110', '吧': '1100', '阿': '1', '巴': '0'
+                '芭': '1111',
+                '啊': '1110',
+                '吧': '1100',
+                '阿': '1',
+                '巴': '0'
             };
 
+            // 喵语加密映射
             const miaoCompressionMap = {
-                '咪': '1111', '咪～': '11110', '嗷呜～': '11100', '嗷': '1100', '嗷～': '11000',
-                '喵～': '10000', '敖呜': '10100', '喵': '1', '呜': '0'
+                '咪': '1111',
+                '咪～': '11110',
+                '嗷呜～': '11100',
+                '嗷': '1100',
+                '嗷～': '11000',
+                '喵～': '10000',
+                '敖呜': '10100',
+                '喵': '1',
+                '呜': '0'
             };
 
+            // 喵语加密2.0映射
             const miaoCompressionMapV2 = {
-                '咪': '1111', '嗷': '1110', '喵': '110', '呜': '10', '～': '0'
+                '咪': '1111',
+                '嗷': '1110',
+                '喵': '110',
+                '呜': '10',
+                '～': '0'
             };
 
+            // 获取当前使用的映射
             const getCompressionMap = () => {
+                if (mode === 'aba') return abaCompressionMap;
                 if (mode === 'miao') return miaoCompressionMap;
                 if (mode === 'miaoV2') return miaoCompressionMapV2;
                 return abaCompressionMap;
             };
 
-            const textToBinary = (text) => text.split('').map(char => {
-                const code = char.charCodeAt(0);
-                return code < 128 ? code.toString(2).padStart(8, '0') : code.toString(2).padStart(16, '0');
-            }).join('');
+            // 动态二进制长度
+            const textToBinary = (text) => {
+                return text.split('').map(char => {
+                    const code = char.charCodeAt(0);
+                    return code < 128 ? code.toString(2).padStart(8, '0') : code.toString(2).padStart(16, '0');
+                }).join('');
+            };
 
             const binaryToText = (binary) => {
                 const chunks = binary.match(/.{1,16}/g);
                 if (!chunks) return '';
-                return chunks.map(chunk => String.fromCharCode(parseInt(chunk, 2))).join('');
+                return chunks.map(chunk => 
+                    String.fromCharCode(parseInt(chunk, 2))
+                ).join('');
             };
-
+            
+            // 已恢复为原始的 compressBinary 函数
             const compressBinary = (binary) => {
                 let result = '';
                 let remaining = binary;
-                const map = getCompressionMap();
-                const patterns = Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+                const maxLen = mode === 'miaoV2' ? 5 : (mode === 'miao' ? 5 : 4);
+                
+                const currentMap = getCompressionMap();
+                const sortedPatterns = Object.entries(currentMap).sort((a,b) => b[1].length - a[1].length);
 
                 while (remaining.length > 0) {
                     let matched = false;
-                    for (const [char, bits] of patterns) {
+                    for (const [char, bits] of sortedPatterns) {
                         if (remaining.startsWith(bits)) {
                             result += char;
                             remaining = remaining.slice(bits.length);
@@ -120,39 +148,69 @@
                             break;
                         }
                     }
+                    
                     if (!matched) {
-                        // 如果没有匹配，这是个降级处理，理论上不应该频繁发生
-                        const fallbackChar = remaining[0] === '1' ? '阿' : '巴'; // 保持原始降级逻辑
-                        result += fallbackChar;
+                         // 恢复原始的、带有特定模式判断的降级逻辑
+                        result += remaining[0] === '1' ? (mode === 'miaoV2' ? '喵' : '阿') : (mode === 'miaoV2' ? '呜' : '巴');
                         remaining = remaining.slice(1);
                     }
                 }
                 return result;
             };
-
+            
+            // 已恢复为原始的 decompressToBinary 函数
             const decompressToBinary = (compressed) => {
                 let binary = '';
                 let remaining = compressed;
-                const map = getCompressionMap();
-                const patterns = Object.entries(map).sort((a, b) => b[0].length - a[0].length);
+                
+                // 特殊处理喵语模式 (恢复原始逻辑)
+                if (mode === 'miao' || mode === 'miaoV2') {
+                    const patterns = (mode === 'miao' ? [
+                        ['咪～', '11110'], ['嗷呜～', '11100'], ['嗷～', '11000'], ['喵～', '10000'],
+                        ['敖呜', '10100'], ['咪', '1111'], ['嗷', '1100'], ['喵', '1'], ['呜', '0']
+                    ] : [ // miaoV2
+                        ['咪', '1111'], ['嗷', '1110'], ['喵', '110'], ['呜', '10'], ['～', '0']
+                    ]).sort((a,b) => b[0].length - a[0].length); // 增加排序以确保最长匹配优先，增强健壮性
 
-                while (remaining.length > 0) {
-                    let matched = false;
-                    for (const [char, bits] of patterns) {
-                        if (remaining.startsWith(char)) {
-                            binary += bits;
-                            remaining = remaining.slice(char.length);
-                            matched = true;
-                            break;
+                    while (remaining.length > 0) {
+                        let matched = false;
+                        for (const [pattern, bits] of patterns) {
+                            if (remaining.startsWith(pattern)) {
+                                binary += bits;
+                                remaining = remaining.slice(pattern.length);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!matched) {
+                            throw new Error('Invalid input');
                         }
                     }
-                    if (!matched) throw new Error('Invalid input character found');
+                } else {
+                    // 阿巴语模式保持原样 (恢复原始逻辑)
+                    const patterns = Object.entries(abaCompressionMap).sort((a,b) => b[0].length - a[0].length);
+                    while (remaining.length > 0) {
+                        let matched = false;
+                        for (const [char, bits] of patterns) {
+                            if (remaining.startsWith(char)) {
+                                binary += bits;
+                                remaining = remaining.slice(char.length);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!matched) {
+                            throw new Error('Invalid input');
+                        }
+                    }
                 }
                 return binary;
             };
 
             // =================================================================
-            // 事件处理函数（逻辑未变，仅清空状态的逻辑保持一致）
+            // 事件处理函数（逻辑未变）
             // =================================================================
 
             const handleEncrypt = () => {
@@ -207,7 +265,6 @@
                 }
             };
 
-
             const handleModeChange = (newMode) => {
                 setMode(newMode);
                 setInput('');
@@ -217,8 +274,7 @@
             };
 
             // =================================================================
-            // 需求2：UI美化和布局适配
-            // 使用React.createElement构建新的UI结构
+            // 需求2：UI美化和布局适配（保持不变）
             // =================================================================
 
             const modeTitles = {
@@ -231,7 +287,7 @@
                 React.createElement('div', { className: 'w-full max-w-lg bg-white/70 backdrop-blur-xl rounded-2xl shadow-2xl p-6 md:p-8 space-y-6' },
                     // -- 标题和模式切换 --
                     React.createElement('div', { className: 'flex justify-between items-center' },
-                        React.createElement('h1', { className: 'text-3xl font-bold text-gray-800' }, 
+                        React.createElement('h1', { className: 'text-2xl sm:text-3xl font-bold text-gray-800' }, 
                             `🐾 ${modeTitles[mode]}`
                         ),
                         React.createElement('div', { className: 'relative group' },
